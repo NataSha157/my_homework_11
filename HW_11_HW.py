@@ -1,11 +1,12 @@
 from collections import UserDict
-from datetime import date, datetime,timedelta
+from datetime import date, datetime
 
 # Додамо функціонал перевірки на правильність наведених значень для полів Phone, Birthday
 
+
 class Field(): # буде батьківським для всіх полів, у ньому потім реалізуємо логіку, загальну для всіх полів
     def __init__(self, value):
-        # self.__value = None
+        self.__value = None # захищенне поле
         self.value = value
 
     @property
@@ -13,7 +14,7 @@ class Field(): # буде батьківським для всіх полів, �
         return self.__value
 
     @value.setter
-    def value(self, value):
+    def value(self, value = None):
         if value:
             self.__value = value
         else:
@@ -21,39 +22,58 @@ class Field(): # буде батьківським для всіх полів, �
 
 
 class Phone(Field): # необов'язкове поле з телефоном та таких один запис (Record) може містити кілька
-    def is_phone(self):
-        # print('dirty phone =', self.value)
-        delimiter = '+- .,/()[]'
-        if len(self.value) > 0 and len(self.value) < 25:
-            for i in self.value:
-                if i in delimiter:
-                    a = self.value.replace(i, '')
-                    self.value = a
-                elif not i.isdigit():
-                    raise ValueError("A phone number is a set of numbers!")
-        # print('clean phone = ', self.value)
-        return self
+    @property
+    def value(self):
+        return self.__value
+
+    @value.setter
+    def value(self, value=None):
+        cleaned_value = self.is_phone(value)
+        if cleaned_value:
+            self.__value = cleaned_value
+        else:
+            raise ValueError('Phone not valid')
+
+    @staticmethod
+    def is_phone(value):
+        result = ''
+        if len(value) > 0:
+            for i in value:
+                if i.isdigit():
+                    result += i
+        if len(value) == 0 or len(result) > 12 or len(result) < 10:
+            raise ValueError("A phone number is a set of numbers!")
+        return result
+
+
 
 
 class Name(Field): # обов'язкове поле з ім'ям
     pass
 
 class Birthday(Field): # поле не обов'язкове, але може бути тільки одне
-    def is_date_birthday(self):
+    @property
+    def value(self):
+        return self.__value
+
+    @value.setter
+    def value(self, value=None):
+        cleaned_value = self.is_date_birthday(value)
+        if cleaned_value:
+            self.__value = cleaned_value
+        else:
+            raise ValueError('Date not valid')
+
+    @staticmethod
+    def is_date_birthday(value):
         delimiter = ' ,./-'
-        # print('self = ', self.value)
-        if len(self.value) == 10:
-            for s in self.value:
+        if len(value) == 10:
+            for s in value:
                 if s in delimiter:
-                    # print(s)
-                    a = self.value.replace(s,'-')
-                    # print('a = ', a)
-                    self.value = a
-                    #print('is_date self = ', self)
-                    # print('is_date self.value = ', self.value)
+                    value = value.replace(s,'-')
                 elif not s.isdigit():
                     raise ValueError("Pleas, enter the date of birth in the format: DD-MM-YYY.")
-            return self
+        return value
 
 
 
@@ -67,14 +87,10 @@ class Record(): #відповідає за логіку додавання/ви�
         self.name = name
         self.phones = []
         if phone:
-            clean_phone = Phone.is_phone(phone)
-            self.phones.append(clean_phone)  # якщо телефон прийде як обьект классу то додамо його в список
-        # print('rec init phones = ', self.phones[0].value)
+            self.phones.append(phone)  # якщо телефон прийде як обьект классу то додамо його в список
         self.birthday = None
         if birthday:
-            self.birthday = Birthday.is_date_birthday(birthday)
-            # print('rec self.birthday.value = ', self.birthday.value)
-        # self.emails = emails
+            self.birthday = birthday
 
 
     def add_phone(self, phone: Phone):
@@ -128,15 +144,50 @@ class Record(): #відповідає за логіку додавання/ви�
         return f'{delta_day.days} days until next birthday'
         pass
 
+    def __str__(self):
+        return f"Contact {self.name.value} Phones {[ph.value for ph in self.phones]} Birthday {self.birthday.value}"
 
 class AddressBook(UserDict): # наслідується від UserDict, та ми потім додамо логіку пошуку за записами до цього класу
-
+    N = 2 # по замовчуванню поставимо по 2 записи
     def add_record(self, record: Record):
         self.data[record.name.value] = record
 
-    def iterator(self, N: int = 2):  # повертає генератор за записами AddressBook і за одну ітерацію повертає уявлення для N записів
-        for key,value in self.data.items():
-            print(f"Abonent {key}, phone: {value.phones[0].value}, birthday: {value.birthday.value}. {Record.days_to_birthday(value)}")
+    def iterator(self, n=None):
+        if n:
+            AddressBook.N = n
+        return self.__next__()
+
+    def __iter__(self):
+        temp_lst = []
+        counter = 0
+
+        for var in self.data.values():
+            temp_lst.append(var)
+            counter += 1
+            if counter >= AddressBook.N:
+                yield temp_lst
+                temp_lst.clear()
+                counter = 0
+        yield temp_lst
+
+    def __next__(self):
+        generator = self.__iter__()
+        page = 1
+        while True:
+            user_input = input("Press ENTER")
+            if user_input == "":
+                try:
+                    result = next(generator)
+                    if result:
+                        print(f"{'*' * 20} Page {page} {'*' * 20}")
+                        page += 1
+                    for var in result:
+                        print(var)
+                except StopIteration:
+                    print(f"{'*' * 20} END {'*' * 20}")
+                    break
+            else:
+                break
 
 
 if __name__ == "__main__":
@@ -147,22 +198,29 @@ if __name__ == "__main__":
     ab = AddressBook()
     ab.add_record(rec)
 
-    name1 = Name('Ann')
-    phone1 = Phone('+ 38 (050) 585 - 58 - 58')
-    phone11 = Phone('+ 38 067 670-16-16')
-    birthday1 = Birthday('1944/02-20')
+    name3 = Name('Ann')
+    phone3 = Phone('+ 38 (050) 585 - 58 - 58')
+    # phone11 = Phone('+ 38 067 670-16-16')
+    birthday3 = Birthday('1944/02-20')
+    rec3 = Record(name3, phone3, birthday3)
+    ab.add_record(rec3)
+
+    name1 = Name('Bob')
+    phone1 = Phone('+ 38 067 670-16-16')
+    birthday1 = Birthday('2001.08.21')
     rec1 = Record(name1, phone1, birthday1)
-    ab1 = AddressBook()
-    ab1.add_record(rec1)
-
-
-
+    name2 = Name('Gill')
+    phone2 = Phone('+ 38 067 670-16-16')
+    birthday2 = Birthday('1999.01.25')
+    rec2 = Record(name2, phone2, birthday2)
+    ab.add_record(rec1)
+    ab.add_record(rec2)
 
     assert isinstance(ab['Bill'], Record)
     assert isinstance(ab['Bill'].name, Name)
     assert isinstance(ab['Bill'].phones, list)
     assert isinstance(ab['Bill'].phones[0], Phone)
-    # assert ab['Bill'].phones[0].value == '1234567890'
+
 
     # print(isinstance(ab['Bill'].birthday, Birthday))
     # print("ab: ",ab['Bill'].birthday.value)
@@ -181,5 +239,5 @@ if __name__ == "__main__":
     # print(rec1.phones[0].value)
     # print(rec.phones[0].value)
 
-    print(AddressBook.iterator(ab))
-    print(AddressBook.iterator(ab1))
+
+    print(ab.iterator(2))
